@@ -107,6 +107,14 @@ do
 	    COMMITER_EMAIL="${2}" &&
 		shift 2
 	    ;;
+	--project-volume-group)
+	    PROJECT_VOLUME_GROUP="${2}" &&
+		shift 2
+	    ;;
+	--project-volume-size)
+	    PROJECT_VOLUME_SIZE="${2}" &&
+		shift 2
+	    ;;
 	*)
 	    echo Unsupported Option &&
 		echo ${1} &&
@@ -151,7 +159,28 @@ done &&
     then
 	REPORT_USER=git
     fi &&
+    if [ -z "${PROJECT_VOLUME_SIZE}" ]
+    then
+	PROJECT_VOLUME_SIZE=1G
+    fi &&
+    if [ ! -z "${PROJECT_VOLUME_GROUP}" ]
+    then
+	echo Unspecified PROJECT_VOLUME_GROUP &&
+	    exit 65
+	;;
+    fi &&
+    if [ -d /dev/${PROJECT_VOLUME_GROUP} ]
+    then
+	TEMP=$(mktemp /dev/${PROJECT_VOLUME_GROUP}/XXXXXXXX)
+    else
+	TEMP=$(mktemp /tmp/XXXXXXXX)
+    fi &&
+    rm -f ${TEMP} &&
+    PROJECT_VOLUME_NAME=$(basename ${TEMP}) &&
+    sudo lvcreate --name ${PROJECT_VOLUME_NAME} --size ${PROJECT_VOLUME_SIZE} --type thinpool ${PROJECT_VOLUME_GROUP} &&
+    sudo mkfs.ext4 /dev/${PROJECT_VOLUME_GROUP}/${PROJECT_VOLUME_NAME} &&
     PROJECT_DIR=$(mktemp -d) &&
+    sudo mount /dev/${PROJECT_VOLUME_GROUP}/${PROJECT_VOLUME_NAME} ${PROJECT_DIR} &&
     SSH_DIR=${PROJECT_DIR}/.ssh &&
     mkdir ${SSH_DIR} &&
     chmod 0700 ${SSH_DIR} &&
@@ -236,5 +265,7 @@ EOF
     fi &&
     export HOME=${PROJECT_DIR} &&
     emacs . &&
+    sudo umount ${PROJECT_DIR} &&
     rm -rf ${PROJECT_DIR} &&
+    lvremove /dev/${PROJECT_VOLUME_GROUP}/${PROJECT_VOLUME_NAME} &&
     true
